@@ -1,14 +1,31 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and secrets
 .venv/
 venv/
+env/
 .env
-.ipynb_checkpoints/
+.env.*
+!.env.example
+
+# Local data and generated outputs
 data/raw/*.csv
 !data/raw/README.md
+data/processed/
+models/
 artifacts/*
 !artifacts/.gitkeep
+*.joblib
+
+# Notebook/editor/OS
+.ipynb_checkpoints/
 .vscode/
 .idea/
 .DS_Store
