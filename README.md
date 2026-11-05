@@ -1,61 +1,58 @@
-# Healthcare Analytics: Patient Length-of-Stay Prediction
+# Healthcare Analytics — Patient Length-of-Stay Prediction
 
-A machine-learning project exploring hospital admission data to predict a patient's **length-of-stay (LOS) category**. The goal is to investigate how patient and admission characteristics can support hospital capacity planning and operational decision-making.
+A reproducible machine-learning project for exploring hospital admission data and predicting a patient's **length-of-stay (LOS) category**.
 
-> **Project status:** Academic / exploratory project. The notebook and Streamlit scripts are historical implementations and should be reviewed and tested before being used as a production application. This project is not a clinical decision-support system.
+> **Educational use only.** This project is not a clinical decision-support system. Model outputs must not be used to make admission, treatment, triage, or discharge decisions.
 
-## Problem Statement
+## Project overview
 
-Patient length of stay is an important operational measure for hospitals. Estimating the likely stay category at admission may help teams study bed demand, resource allocation, and care planning.
+Patient length of stay is an important operational measure for hospitals. This project explores whether structured admission data can be used to classify a patient's expected stay category.
 
-This repository explores data preparation, exploratory analysis, feature encoding, and classification approaches for LOS prediction.
+### Maintained workflow
 
-## Models Explored
+- Upload a labeled CSV through the Streamlit application.
+- Select the target column (the original project used `Stay`).
+- Split the data into training and hold-out test sets.
+- Impute missing values and encode categorical features inside a scikit-learn pipeline.
+- Train a Random Forest baseline.
+- Review accuracy, balanced accuracy, macro-F1, weighted-F1, a classification report, and a confusion matrix.
+- Download the fitted model bundle.
+- Upload a second CSV containing the same input features to generate batch predictions and download the results.
 
-The original project report records the following accuracy values:
+Preprocessing is fitted on the training split only. The preprocessing and model are saved together in one pipeline to avoid inconsistent train/test transformations.
 
-| Model | Reported accuracy |
-| --- | ---: |
-| Naive Bayes | 34.55% |
-| XGBoost | 43.05% |
-| Dense Neural Network | 42.50% |
-
-**Interpretation:** These are values reported in the original project documentation. They have not been independently reproduced in this repository review. Re-run the notebook with a documented train/validation/test split before treating them as comparable model benchmarks.
-
-## Repository Contents
+## Repository structure
 
 ```text
 healthcare-analytics/
-├── Healthcare-Analytics-main/
-│   ├── Health50/
-│   │   └── test.csv
+├── app.py
+├── src/healthcare_los/
+│   ├── __init__.py
+│   ├── modeling.py
+│   └── cli.py
+├── tests/test_modeling.py
+├── notebooks/
+│   ├── README.md
+│   └── legacy_healthcare_analysis.ipynb
+├── archive/legacy-project/
+│   ├── Health50/test.csv
 │   ├── app.py
 │   ├── app1.py
-│   ├── health.py
-│   ├── health.ipynb
 │   ├── encoder.pkl
-│   └── encoder1.pkl
-└── README.md
+│   ├── encoder1.pkl
+│   └── health.py
+├── data/README.md
+├── .github/workflows/tests.yml
+├── .gitignore
+├── CONTRIBUTING.md
+├── pyproject.toml
+├── requirements.txt
+└── requirements-notebook.txt
 ```
 
-- **health.ipynb** — exploratory data analysis, preprocessing, and model experiments.
-- **app.py / app1.py / health.py** — Streamlit application experiments.
-- **Health50/test.csv** — dataset file currently visible in the repository.
-- **encoder*.pkl** — serialized encoders used by earlier experiments.
+The original notebook, Streamlit experiments, encoder files, and historical test dataset are preserved for reference. The maintained application and model pipeline are at the repository root and under `src/healthcare_los/`.
 
-Some scripts refer to files such as `train.csv` and `model.pkl` that are not present at the paths currently referenced. The app therefore may not run as-is.
-
-## Technology Stack
-
-- Python
-- Jupyter Notebook
-- Pandas and NumPy
-- Matplotlib and Seaborn
-- Scikit-learn
-- XGBoost
-- Streamlit
-
-## Getting Started
+## Quick start
 
 ### 1. Clone the repository
 
@@ -64,64 +61,116 @@ git clone https://github.com/Bhavani-0417/healthcare-analytics.git
 cd healthcare-analytics
 ```
 
-### 2. Set up Python
+### 2. Create and activate a virtual environment
 
-Use Python 3.10 or a compatible version, then create and activate a virtual environment.
+**Windows PowerShell**
 
-**Windows**
 ```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 ```
 
 **macOS / Linux**
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3. Install dependencies
-
-The repository does not currently include a verified dependency lockfile or requirements file. Install the packages used by the notebook and app scripts:
+### 3. Install the project
 
 ```bash
-pip install numpy pandas matplotlib seaborn scikit-learn xgboost streamlit jupyter
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
 ```
 
-### 4. Explore the notebook
+### 4. Launch the Streamlit app
 
-Open `Healthcare-Analytics-main/health.ipynb` in Jupyter. The notebook expects training and test CSV files in its working directory; provide the appropriate dataset files before running all cells.
+```bash
+streamlit run app.py
+```
 
-### 5. Streamlit application
+Upload a labeled CSV, select its target column (usually `Stay` for the original dataset), and train the model. After evaluation, upload a second CSV with the same feature columns but without the target to produce batch predictions.
 
-The Streamlit scripts are experimental and have file/model dependencies that need to be reconciled before launch. In particular, `health.py` loads `model.pkl` and `train.csv`; those files must exist at the expected paths and be generated using a compatible preprocessing pipeline.
+### 5. Train from the command line
 
-## Important Reproducibility Notes
+```bash
+python -m healthcare_los.cli --input path/to/train.csv --target Stay --output models/los_model.joblib
+```
 
-- Fit categorical encoders on training data only, then use the same fitted encoders to transform validation and test data.
-- Keep preprocessing, feature ordering, and model artifacts together in a reproducible pipeline.
-- Evaluate on a held-out dataset and report metrics such as accuracy, macro-F1, and a confusion matrix.
-- Document the exact dataset source, target definition, split strategy, and random seed.
-- Do not commit private, identifiable, or otherwise sensitive patient data.
+The output directory is created automatically. Generated model files are excluded from Git; train locally using a dataset you are authorized to use.
 
-## Responsible Use
+### 6. Run tests
 
-This project is for educational experimentation with healthcare data. Predictions are not medical advice and must not be used to make decisions about patient treatment, discharge, or admission. Any real-world use would require appropriate clinical validation, privacy review, bias assessment, and governance.
+```bash
+pytest
+```
 
-## Future Improvements
+## Model and evaluation
 
-- Consolidate the duplicate Streamlit scripts into one maintainable application.
-- Add a reproducible preprocessing and model-training pipeline.
-- Add a requirements file with tested package versions.
-- Add model evaluation outputs and visualizations.
-- Add input validation, error handling, and automated tests.
-- Provide screenshots or a short demo after the application is verified.
+The maintained workflow currently uses a Random Forest classifier with:
+- Median imputation for numeric features.
+- Most-frequent imputation and one-hot encoding for categorical features.
+- A reproducible train/hold-out split (default: 80/20, random seed 42).
+- Class-balanced sampling weights.
+
+The application reports:
+
+| Metric | Meaning |
+| --- | --- |
+| Accuracy | Overall fraction of correct predictions |
+| Balanced accuracy | Average recall across classes |
+| Macro-F1 | F1 averaged equally across classes |
+| Weighted-F1 | F1 averaged by class support |
+| Confusion matrix | Correct and incorrect predictions by class |
+
+### Historical experiments
+
+The original academic README recorded these values:
+
+| Historical experiment | Previously reported accuracy |
+| --- | ---: |
+| Naive Bayes | 34.55% |
+| XGBoost | 43.05% |
+| Dense Neural Network | 42.50% |
+
+These figures have **not** been independently reproduced in the maintained pipeline. Do not compare them with new results until the original dataset, split strategy, preprocessing, and model configurations are recovered and documented. The current app uses a separate Random Forest baseline.
+
+See [docs/MODEL_CARD.md](docs/MODEL_CARD.md) for the model's intended use, evaluation limitations, and data requirements.
+
+## Data and privacy
+
+The maintained training workflow expects a labeled CSV uploaded by the user or supplied to the CLI. The repository does not contain a verified training dataset for this pipeline.
+
+The historical `test.csv` is preserved at `archive/legacy-project/Health50/test.csv`. Its provenance and license should be verified before redistribution or reuse. Do not upload identifiable patient information, confidential records, or data you are not authorized to share.
+
+See [data/README.md](data/README.md) for data-handling guidance.
+
+## Engineering and limitations
+
+- Categorical encoders are fitted on training data only and reused for hold-out and prediction data.
+- Unseen inference categories are handled by the fitted one-hot encoder.
+- The model artifact contains the complete preprocessing and classifier pipeline.
+- Automated tests use synthetic data and do not require a healthcare dataset.
+- A random hold-out split is not a substitute for temporal or external validation.
+- Dataset leakage, class imbalance, distribution shift, and inconsistent labels can materially affect results.
+
+This is an educational project, not medical advice. Any real-world healthcare application would require appropriate clinical validation, privacy and security review, bias assessment, regulatory review, and qualified human oversight.
+
+## Roadmap
+
+- [x] Separate maintained code from original experiments.
+- [x] Add a reusable preprocessing and training pipeline.
+- [x] Add hold-out evaluation and model export.
+- [x] Add batch prediction from a CSV upload.
+- [x] Add automated tests and continuous integration.
+- [ ] Reproduce historical experiments on a verified dataset.
+- [ ] Add screenshots after testing with an authorized dataset.
+- [ ] Add external or temporal validation.
 
 ## Author
 
 **Bhavani Gujjari**  
-GitHub: [@Bhavani-0417](https://github.com/Bhavani-0417)
+[GitHub: @Bhavani-0417](https://github.com/Bhavani-0417)
 
----
-
-Contributions, suggestions, and constructive feedback are welcome.
+Feedback and suggestions are welcome.
