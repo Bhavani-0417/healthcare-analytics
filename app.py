@@ -1,101 +1,159 @@
-"""Streamlit interface for the trained length-of-stay classifier."""
+"""Streamlit app for training and demonstrating a patient LOS classifier."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import io
 
 import joblib
 import pandas as pd
 import streamlit as st
 
-MODEL_PATH = Path("artifacts/los_pipeline.joblib")
+from healthcare_los.modeling import predict_rows, train_evaluate
 
-st.set_page_config(page_title="Healthcare LOS Analytics", page_icon="🏥", layout="wide")
+st.set_page_config(
+    page_title="Healthcare LOS Analytics",
+    page_icon="🏥",
+    layout="wide",
+)
+st.title("Healthcare Analytics")
+st.subheader("Patient Length-of-Stay Classification")
+st.caption("Educational machine-learning baseline · Not for clinical decisions")
 
+with st.sidebar:
+    st.header("Experiment settings")
+    upload = st.file_uploader("Upload labeled CSV", type=["csv"])
+    test_size = st.slider("Hold-out test proportion", 0.10, 0.40, 0.20, 0.05)
+    seed = st.number_input("Random seed", min_value=0, max_value=100000, value=42)
 
-@st.cache_resource
-def load_artifact(path: str) -> dict:
-    return joblib.load(path)
-
-
-st.title("Patient Length-of-Stay Prediction")
-st.caption("Educational machine-learning demonstration · Not for clinical decision-making")
 st.warning(
-    "This prototype is for learning and demonstration only. It is not medical advice "
-    "and must not be used to make admission, treatment, or discharge decisions."
+    "This project is for educational use only. Never upload identifiable patient "
+    "information, confidential records, or data you are not authorized to use. "
+    "Predictions must not guide patient care, admission, or discharge."
 )
 
-if not MODEL_PATH.is_file():
+if upload is None:
     st.info(
-        "No trained model was found. Add the labeled training dataset at "
-        "`data/raw/train.csv`, install the project dependencies, and run "
-        "`python train.py` before starting the app."
+        "Upload a labeled CSV to begin. The original project's target column was named "
+        "Stay. You can use data/synthetic_demo.csv for a demonstration; it contains "
+        "artificial sample rows, not real patient records."
+    )
+    st.markdown(
+        "**Workflow**\n"
+        "1. Upload a labeled CSV.\n"
+        "2. Select the target column.\n"
+        "3. Train and review hold-out metrics.\n"
+        "4. Download the model bundle.\n"
+        "5. Upload new rows for batch prediction."
     )
     st.stop()
 
 try:
-    artifact = load_artifact(str(MODEL_PATH))
-except Exception as exc:  # A readable message is preferable to a raw traceback in the UI.
-    st.error(f"Could not load the model artifact: {exc}")
+    dataframe = pd.read_csv(upload)
+except Exception as exc:
+    st.error(f"Could not read CSV: {exc}")
     st.stop()
 
-pipeline = artifact["pipeline"]
-feature_columns = artifact["feature_columns"]
-schema = artifact["input_schema"]
+if dataframe.empty:
+    st.error("The uploaded CSV contains no rows.")
+    st.stop()
 
-st.subheader("Enter admission details")
-with st.form("prediction_form"):
-    inputs: dict[str, object] = {}
-    left, right = st.columns(2)
-    for index, column in enumerate(feature_columns):
-        spec = schema[column]
-        target = left if index % 2 == 0 else right
-        label = column.replace("_", " ").strip().title()
-        with target:
-            if spec["kind"] == "categorical":
-                options = spec["options"]
-                default = spec["default"]
-                selected_index = options.index(default) if default in options else 0
-                inputs[column] = st.selectbox(label, options, index=selected_index)
-            elif spec["kind"] == "text":
-                inputs[column] = st.text_input(label, value=str(spec["default"]))
-            else:
-                kwargs = {
-                    "label": label,
-                    "min_value": float(spec["minimum"]),
-                    "max_value": float(spec["maximum"]),
-                    "value": float(spec["default"]),
-                }
-                if spec.get("integer"):
-                    inputs[column] = st.number_input(
-                        **kwargs,
-                        step=1.0,
-                        format="%.0f",
-                    )
-                else:
-                    inputs[column] = st.number_input(**kwargs, step=0.1)
+first, second, third = st.columns(3)
+first.metric("Rows", f"{len(dataframe):,}")
+second.metric("Columns", f"{len(dataframe.columns):,}")
+third.metric("Missing cells", f"{int(dataframe.isna().sum().sum()):,}")
+st.dataframe(dataframe.head(10), use_container_width=True)
 
-    submitted = st.form_submit_button("Predict length-of-stay category", type="primary")
+default_target = "Stay" if "Stay" in dataframe.columns else dataframe.columns[-1]
+target_column = st.selectbox(
+    "Target column",
+    list(dataframe.columns),
+    index=list(dataframe.columns).index(default_target),
+)
 
-if submitted:
-    input_frame = pd.DataFrame([inputs], columns=feature_columns)
+if dataframe[target_column].dropna().nunique() < 2:
+    st.error("The selected target must contain at least two distinct classes.")
+    st.stop()
+
+if st.button("Train and evaluate model", type="primary"):
     try:
-        prediction = str(pipeline.predict(input_frame)[0])
-        st.success(f"Predicted length-of-stay category: **{prediction}**")
-        st.caption("Prediction reflects patterns in the training dataset, not an individual clinical assessment.")
+        with st.spinner("Training and evaluating the model..."):
+            st.session_state["los_result"] = train_evaluate(
+                dataframe,
+                target_column=target_column,
+                test_size=float(test_size),
+                random_state=int(seed),
+            )
+            st.session_state["los_target"] = target_column
     except Exception as exc:
-        st.error(f"Prediction failed. Check the saved model and input schema: {exc}")
+        st.session_state.pop("los_result", None)
+        st.error(f"Training failed: {exc}")
 
-with st.expander("Model evaluation from the saved training run"):
-    metrics = artifact.get("metrics", {})
-    if metrics:
-        cols = st.columns(3)
-        cols[0].metric("Holdout accuracy", f"{metrics.get('accuracy', 0):.1%}")
-        cols[1].metric("Macro F1", f"{metrics.get('macro_f1', 0):.3f}")
-        cols[2].metric("Weighted F1", f"{metrics.get('weighted_f1', 0):.3f}")
+result = st.session_state.get("los_result")
+if result is not None:
+    if st.session_state.get("los_target") != target_column:
+        st.info("The target selection changed. Train again to refresh the evaluation.")
+        st.stop()
+
+    st.markdown("### Hold-out evaluation")
+    metrics = result["metrics"]
+    metric_columns = st.columns(4)
+    for column, label, key in zip(
+        metric_columns,
+        ["Accuracy", "Balanced accuracy", "Macro-F1", "Weighted-F1"],
+        ["accuracy", "balanced_accuracy", "macro_f1", "weighted_f1"],
+    ):
+        column.metric(label, f"{metrics[key]:.3f}")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Classification report")
+        st.dataframe(result["classification_report"], use_container_width=True)
+    with right:
+        st.markdown("#### Confusion matrix")
+        st.dataframe(result["confusion_matrix"], use_container_width=True)
+
+    st.caption(
+        f"Training rows: {result['n_train']:,} · "
+        f"Hold-out rows: {result['n_test']:,} · Random seed: {seed}"
+    )
+    if result["bundle"]["excluded_identifier_columns"]:
         st.caption(
-            f"Evaluated on {metrics.get('test_rows', '—')} holdout rows; "
-            f"random state {metrics.get('random_state', 'recorded in training configuration')}."
+            "Excluded identifier fields: "
+            + ", ".join(result["bundle"]["excluded_identifier_columns"])
         )
-    else:
-        st.write("No evaluation metrics were stored in this artifact.")
+
+    buffer = io.BytesIO()
+    joblib.dump(result["bundle"], buffer)
+    st.download_button(
+        "Download trained model (.joblib)",
+        buffer.getvalue(),
+        file_name="healthcare_los_model.joblib",
+        mime="application/octet-stream",
+    )
+
+    st.markdown("### Predict new rows")
+    prediction_upload = st.file_uploader(
+        "Upload an unlabeled CSV with the same feature columns",
+        type=["csv"],
+        key="prediction_csv",
+    )
+    if prediction_upload is not None:
+        try:
+            new_rows = pd.read_csv(prediction_upload)
+            predictions = predict_rows(result["bundle"], new_rows)
+            output = new_rows.copy()
+            output["predicted_" + target_column] = predictions
+            st.dataframe(output.head(20), use_container_width=True)
+            st.download_button(
+                "Download predictions CSV",
+                output.to_csv(index=False).encode("utf-8"),
+                file_name="healthcare_los_predictions.csv",
+                mime="text/csv",
+            )
+        except Exception as exc:
+            st.error(f"Could not generate predictions: {exc}")
+
+st.warning(
+    "This result is a dataset-specific educational baseline, not evidence of clinical "
+    "safety, fairness, or generalization to other hospitals."
+)
