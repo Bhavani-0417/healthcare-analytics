@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 
 import joblib
@@ -47,8 +48,15 @@ if upload is None:
     )
     st.stop()
 
+upload_bytes = upload.getvalue()
+upload_fingerprint = hashlib.sha256(upload_bytes).hexdigest()
+if st.session_state.get("los_upload_fingerprint") != upload_fingerprint:
+    st.session_state.pop("los_result", None)
+    st.session_state.pop("los_target", None)
+    st.session_state["los_upload_fingerprint"] = upload_fingerprint
+
 try:
-    dataframe = pd.read_csv(upload)
+    dataframe = pd.read_csv(io.BytesIO(upload_bytes))
 except Exception as exc:
     st.error(f"Could not read CSV: {exc}")
     st.stop()
