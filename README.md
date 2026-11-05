@@ -1,64 +1,64 @@
-# Healthcare Analytics: Patient Length-of-Stay Prediction
+# Healthcare Analytics — Patient Length-of-Stay Prediction
 
-An exploratory machine-learning project that studies hospital admission data and predicts a patient's **length-of-stay (LOS) category**. The refactored workflow provides a reproducible preprocessing pipeline, a held-out evaluation step, and a Streamlit demonstration app.
+An exploratory machine-learning project for classifying a hospital patient's **length-of-stay (LOS) category** from structured admission data. The maintained workflow includes reusable preprocessing, hold-out evaluation, a Streamlit demonstration app, and a command-line training entry point.
 
-> **Educational project only.** This prototype is not medical advice or a clinical decision-support system. It must not be used to make admission, treatment, or discharge decisions.
+> **Educational use only.** This prototype is not medical advice or a clinical decision-support system. It must not be used to make admission, triage, treatment, or discharge decisions.
 
 ## Project overview
 
-Patient length of stay is an important operational measure. This project explores whether admission and hospital attributes can help estimate LOS categories for educational analysis of hospital capacity and resource planning.
+Patient length of stay is an important operational measure for hospitals. This project explores whether selected admission and hospital attributes can help estimate LOS categories for learning and experimentation.
 
-### Models and historical results
+### What the maintained workflow does
 
-The earlier README recorded these results:
+- Accepts a labeled CSV upload in the Streamlit app.
+- Uses the selected target column (the original project used `Stay`).
+- Excludes the known row/patient identifier columns `case_id` and `patientid` when present.
+- Splits data into training and hold-out partitions.
+- Fits missing-value imputation and categorical encoding on the training partition only.
+- Trains a class-weighted Random Forest baseline.
+- Reports accuracy, balanced accuracy, macro-F1, weighted-F1, a classification report, and a confusion matrix.
+- Downloads the fitted model bundle and supports batch predictions from a second CSV.
 
-| Historical model | Previously reported accuracy |
-| --- | ---: |
-| Naive Bayes | 34.55% |
-| XGBoost | 43.05% |
-| Dense Neural Network | 42.50% |
-
-These values are retained only as historical project notes. They have not been reproduced by the refactored pipeline and should not be compared as validated benchmarks. Train the new pipeline on the labeled dataset to generate fresh metrics.
+The pipeline uses median imputation for numeric features and most-frequent imputation plus one-hot encoding for categorical features. Unknown categories at prediction time are handled by the fitted encoder.
 
 ## Technology stack
+
 - Python 3.10+
 - Pandas and NumPy
 - Scikit-learn and Joblib
 - Streamlit
 - Pytest and Ruff
+- Jupyter Notebook for the historical analysis
 
 ## Repository structure
 
 ```text
 healthcare-analytics/
- ├── app.py                      # Streamlit prediction interface
- ├─  train.py                    # Model training entry point
- ├─  pyproject.toml               # Project metadata and dependencies
- ┸─ src/healthcare_los/
- │   ├─ data.py                 # Dataset validation and feature preparation
-│   └─ modeling.py             # Preprocessing, training, and evaluation
-│  └─ cli.py                  # Training CLI
-蔜── data/raw/                   # Local training CSV (not committed)
-┸─ artifacts/                  # Generated model and evaluation outputs (not committed)
-├─ tests/                      # Automated tests
-├─ docs/MODELING_NOTES.md      # Modeling assumptions and cautions
-┸─ [github/workflows/ci.yml]   # Automated test and lint workflow
-┙─ Healthcare-Analytics-main/ # Original notebook and scripts retained for reference
+|-- app.py
+|-- train.py
+|-- pyproject.toml
+|-- src/
+|   `-- healthcare_los/
+|       |-- __init__.py
+|       |-- data.py
+|       |-- modeling.py
+|       `-- cli.py
+|-- tests/
+|-- data/
+|   |-- raw/README.md
+|   `-- synthetic_demo.csv
+|-- artifacts/                 # Generated model/evaluation files; git-ignored
+|-- docs/
+|   |-- MODELING_NOTES.md
+|   `-- MODEL_CARD.md
+|-- .github/workflows/ci.yml
+|-- CONTRIBUTING.md
+`-- Healthcare-Analytics-main/ # Original notebook and scripts retained for reference
 ```
 
-## Dataset setup
-The historical notebook expects a labeled training file with a `Stay` target. The current repository does **not** contain that labeled training file; it contains an older `Health50/test.csv` file, which is not suitable for supervised training because it does not include the target label.
+## Quick start
 
-1. Obtain the authorized labeled training CSV from the dataset provider or original project source.
-2. Place it at `data/raw/train.csv`.
-3. Confirm that it includes the `Stay` target column.
-4. Do not commit patient-identifiable, confidential, or otherwise sensitive records. Local CSV files in `data/raw/` are ignored by Git.
-
-See [`data/raw/README.md`](data/raw/README.md) for details.
-
-## Installation
-
-Python 3.10 or newer is recommended.
+### 1. Clone and create an environment
 
 ```bash
 git clone https://github.com/Bhavani-0417/healthcare-analytics.git
@@ -66,7 +66,7 @@ cd healthcare-analytics
 python -m venv .venv
 ```
 
-Activate the environment:
+Activate it:
 
 **Windows PowerShell**
 
@@ -80,73 +80,90 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
-Install the application and development dependencies:
+### 2. Install dependencies
 
 ```bash
 python -m pip install --upgrade pip
 pip install -e ".[app,dev]"
 ```
 
-## Train and evaluate
-
-After placing the labeled CSV at `data/raw/train.csv`:
-
-```bash
-python train.py
-```
-
-Optional arguments:
-
-```bash
-python train.py --data data/raw/train.csv --target Stay --test-size 0.2 --random-state 42 --output artifacts
-```
-
-The training command fits preprocessing only on the training partition, evaluates against a stratified holdout partition, and writes:
-
-- `artifacts/los_pipeline.joblib` — preprocessing and trained model in one artifact.
-- `artifacts/metrics.json` — accuracy, macro-F1, weighted-F1, and per-class metrics.
-- `artifacts/confusion_matrix.csv` — holdout confusion matrix.
-
-Generated model files and metrics are excluded from Git by default.
-
-## Run the Streamlit app
-
-Train the model first, then run:
+### 3. Run the Streamlit app
 
 ```bash
 streamlit run app.py
 ```
 
-The interface reads feature names, category options, and numeric ranges from the saved training artifact. It supports unseen categorical values through the fitted one-hot encoder's `handle_unknown="ignore"` behavior.
+Upload a labeled CSV, select the target column, and choose **Train and evaluate model**. To try the interface without a real dataset, upload `data/synthetic_demo.csv`. It contains artificial demonstration rows only and must not be described as real healthcare data.
+
+After training, the app displays hold-out metrics and the confusion matrix. You can download the fitted model bundle. To make batch predictions, upload a second CSV with the same predictor columns (the target column is not required).
+
+### 4. Train from the command line
+
+For repeatable local training, put an authorized labeled CSV at `data/raw/train.csv` (with a `Stay` column), then run:
+
+```bash
+python train.py
+```
+
+Or provide paths and settings explicitly:
+
+```bash
+python train.py --data data/raw/train.csv --target Stay --test-size 0.2 --random-state 42 --output artifacts
+```
+
+The command writes:
+
+- `artifacts/los_pipeline.joblib` — fitted preprocessing and model bundle.
+- `artifacts/metrics.json` — metrics and per-class report.
+- `artifacts/confusion_matrix.csv` — hold-out confusion matrix.
+
+Generated artifacts and local raw CSV files are excluded from Git.
+
+## Dataset and privacy
+
+The repository does not include the original labeled training dataset. The historical `Healthcare-Analytics-main/Health50/test.csv` file is an unlabeled test file and cannot be substituted for a labeled training set.
+
+Before training on external data:
+1. Verify dataset provenance, license, and permitted use.
+2. Confirm the target definition and the meaning of every feature.
+3. Do not upload or commit identifiable, confidential, or otherwise sensitive patient information.
+4. Keep private datasets and generated model files outside Git.
+
+See [data/raw/README.md](data/raw/README.md).
 
 ## Tests and code quality
 
 ```bash
 pytest -q
-ruff check .
+ruff check app.py train.py src tests
 ```
 
-A GitHub Actions workflow runs tests and lint checks on pushes to the refactor branch and on pull requests to `main`.
+GitHub Actions runs the tests and lint checks on pushes to `main` and pull requests to `main`. The legacy notebook is retained for reference and is not included in the maintained-code lint target.
+
+## Historical experiments
+
+The original README recorded the following accuracy values:
+
+| Historical model | Previously reported accuracy |
+| --- | ---: |
+| Naive Bayes | 34.55% |
+| XGBoost | 43.05% |
+| Dense Neural Network | 42.50% |
+
+These figures are retained only as historical notes. They have not been independently reproduced by the maintained pipeline and must not be presented as validated benchmarks. The original notebook also fits separate label encoders on training and test data and includes synthetic-data experiments; its reported results should be re-evaluated before comparison.
 
 ## Modeling notes and limitations
 
-- `case_id` and `patientid` are excluded as identifiers; review all other features for leakage and relevance before drawing conclusions.
-- Missing numeric values are median-imputed. Missing categorical values are most-frequent-imputed and one-hot encoded.
-- Evaluation uses a stratified holdout split. For serious model assessment, add cross-validation, class-level error analysis, calibration review, and external validation.
-- The earlier notebook separately fitted label encoders to train and test data and later generated synthetic classification data. Those notebook results are not used by the refactored training workflow.
-- Any real-world healthcare use would require appropriate privacy, security, fairness, clinical validation, and governance review.
+- Excluding `case_id` and `patientid` reduces identifier memorization, but other feature leakage may remain. Review feature definitions carefully.
+- A stratified random hold-out split is a baseline, not external validation.
+- Class imbalance can make accuracy misleading; inspect balanced accuracy and per-class metrics.
+- Correlated records by patient, hospital, or time can make a random split optimistic.
+- Any real-world healthcare use would require privacy, security, bias, clinical validation, and governance review.
 
-See [`docs/MODELING_NOTES.md`](docs/MODELING_NOTES.md).
-
-## Future improvements
-
-- Re-run model comparison using the authorized labeled dataset and a consistent evaluation protocol.
-- Add feature-importance analysis and class-level error review.
-- Add model versioning and reproducible experiment tracking.
-- Add app screenshots only after the end-to-end workflow is verified.
+See [docs/MODELING_NOTES.md](docs/MODELING_NOTES.md) and [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
 
 ## Author
 
 **Bhavani Gujjari** · [GitHub](https://github.com/Bhavani-0417)
 
-Feedback and suggestions are welcome.
+Feedback and constructive suggestions are welcome.
