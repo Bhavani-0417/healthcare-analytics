@@ -12,12 +12,12 @@ Patient length of stay is an important operational measure for hospitals. This p
 
 - Accepts a labeled CSV upload in the Streamlit app.
 - Uses the selected target column (the original project used `Stay`).
-- Excludes the known row/patient identifier columns `case_id` and `patientid` when present.
+- Excludes known row/patient identifiers `case_id` and `patientid` when present.
 - Splits data into training and hold-out partitions.
-- Fits missing-value imputation and categorical encoding on the training partition only.
+- Fits imputation and categorical encoding on the training partition only.
 - Trains a class-weighted Random Forest baseline.
 - Reports accuracy, balanced accuracy, macro-F1, weighted-F1, a classification report, and a confusion matrix.
-- Downloads the fitted model bundle and supports batch predictions from a second CSV.
+- Downloads the fitted model bundle and supports batch predictions from another CSV.
 
 The pipeline uses median imputation for numeric features and most-frequent imputation plus one-hot encoding for categorical features. Unknown categories at prediction time are handled by the fitted encoder.
 
@@ -37,12 +37,13 @@ healthcare-analytics/
 |-- app.py
 |-- train.py
 |-- pyproject.toml
-|-- src/
-|   `-- healthcare_los/
-|       |-- __init__.py
-|       |-- data.py
-|       |-- modeling.py
-|       `-- cli.py
+|-- requirements.txt
+|-- requirements-notebook.txt
+|-- src/healthcare_los/
+|   |-- __init__.py
+|   |-- data.py
+|   |-- modeling.py
+|   `-- cli.py
 |-- tests/
 |-- data/
 |   |-- raw/README.md
@@ -51,9 +52,10 @@ healthcare-analytics/
 |-- docs/
 |   |-- MODELING_NOTES.md
 |   `-- MODEL_CARD.md
+|-- notebooks/                 # Original exploratory notebook
+|-- archive/legacy-project/    # Superseded app scripts, encoders, and old test CSV
 |-- .github/workflows/ci.yml
-|-- CONTRIBUTING.md
-`-- Healthcare-Analytics-main/ # Original notebook and scripts retained for reference
+`-- CONTRIBUTING.md
 ```
 
 ## Quick start
@@ -69,13 +71,11 @@ python -m venv .venv
 Activate it:
 
 **Windows PowerShell**
-
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
 **macOS / Linux**
-
 ```bash
 source .venv/bin/activate
 ```
@@ -86,6 +86,8 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[app,dev]"
 ```
+
+For the original notebook experiments, install `requirements-notebook.txt` as well.
 
 ### 3. Run the Streamlit app
 
@@ -121,11 +123,11 @@ Generated artifacts and local raw CSV files are excluded from Git.
 
 ## Dataset and privacy
 
-The repository does not include the original labeled training dataset. The historical `Healthcare-Analytics-main/Health50/test.csv` file is an unlabeled test file and cannot be substituted for a labeled training set.
+The repository does not include the original labeled training dataset. The historical `archive/legacy-project/Health50/test.csv` file is an unlabeled test file and cannot be substituted for a labeled training set.
 
 Before training on external data:
 1. Verify dataset provenance, license, and permitted use.
-2. Confirm the target definition and the meaning of every feature.
+2. Confirm the target definition and meaning of every feature.
 3. Do not upload or commit identifiable, confidential, or otherwise sensitive patient information.
 4. Keep private datasets and generated model files outside Git.
 
@@ -138,11 +140,11 @@ pytest -q
 ruff check app.py train.py src tests
 ```
 
-GitHub Actions runs the tests and lint checks on pushes to `main` and pull requests to `main`. The legacy notebook is retained for reference and is not included in the maintained-code lint target.
+GitHub Actions runs tests and lint checks on pushes to `main` and pull requests to `main`. Legacy files are retained for traceability and excluded from the maintained-code lint target.
 
 ## Historical experiments
 
-The original README recorded the following accuracy values:
+The original README recorded these accuracy values:
 
 | Historical model | Previously reported accuracy |
 | --- | ---: |
@@ -150,7 +152,7 @@ The original README recorded the following accuracy values:
 | XGBoost | 43.05% |
 | Dense Neural Network | 42.50% |
 
-These figures are retained only as historical notes. They have not been independently reproduced by the maintained pipeline and must not be presented as validated benchmarks. The original notebook also fits separate label encoders on training and test data and includes synthetic-data experiments; its reported results should be re-evaluated before comparison.
+These values are retained only as historical notes. They have not been independently reproduced by the maintained pipeline and must not be presented as validated benchmarks. The original notebook separately fits label encoders on training and test data and includes synthetic-data experiments; its results should be re-evaluated before comparison.
 
 ## Modeling notes and limitations
 
