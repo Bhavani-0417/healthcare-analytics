@@ -1,6 +1,7 @@
+import joblib
 import pandas as pd
 
-from healthcare_los.modeling import build_input_schema, build_pipeline
+from healthcare_los.modeling import build_input_schema, build_pipeline, train_and_save
 
 
 def test_pipeline_handles_missing_and_unseen_categories():
@@ -27,3 +28,31 @@ def test_input_schema_has_numeric_and_categorical_fields():
     assert schema["age"]["kind"] == "numeric"
     assert schema["department"]["kind"] == "categorical"
     assert schema["department"]["default"] == "A"
+
+
+def test_training_saves_predictable_artifact_and_metrics(tmp_path):
+    rows = 80
+    frame = pd.DataFrame(
+        {
+            "case_id": range(rows),
+            "patientid": range(1000, 1000 + rows),
+            "age": [20 + (index % 55) for index in range(rows)],
+            "department": [["General", "Surgery", "Emergency"][index % 3] for index in range(rows)],
+            "Stay": [["short", "medium", "long", "extended"][index % 4] for index in range(rows)],
+        }
+    )
+    dataset_path = tmp_path / "train.csv"
+    output_path = tmp_path / "artifacts"
+    frame.to_csv(dataset_path, index=False)
+
+    metrics = train_and_save(dataset_path, output_path)
+    artifact = joblib.load(output_path / "los_pipeline.joblib")
+    sample = pd.DataFrame(
+        [{column: artifact["input_schema"][column]["default"] for column in artifact["feature_columns"]}]
+    )
+
+    assert metrics["test_rows"] == 16
+    assert 0.0 <= metrics["accuracy"] <= 1.0
+    assert len(artifact["pipeline"].predict(sample)) == 1
+    assert (output_path / "metrics.json").is_file()
+    assert (output_path / "confusion_matrix.csv").is_file()
