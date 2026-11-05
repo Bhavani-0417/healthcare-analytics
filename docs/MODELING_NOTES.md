@@ -2,16 +2,22 @@
 
 ## Target and predictors
 
-The original notebook uses `Stay` as the target label. The refactored baseline excludes `case_id` and `patientid` from predictors because they are identifiers rather than generalizable patient attributes. All remaining columns are treated as candidate predictors; review them for leakage and appropriateness before interpreting results.
+The original notebook uses `Stay` as the target label. The maintained workflow removes rows with a missing target, excludes `case_id` and `patientid` from predictors when present, and drops columns that are entirely missing. Remaining columns are candidate predictors; review them for relevance and leakage before interpreting results.
 
 ## Preprocessing
 
-The training pipeline learns imputation and categorical encoding from the training split only. It uses median imputation for numeric columns, most-frequent imputation plus one-hot encoding for categorical columns, and ignores unseen categories at inference time.
+The preprocessing pipeline is fitted only on the training partition. Numeric features use median imputation. Categorical features use most-frequent imputation and one-hot encoding with unseen categories ignored at inference time.
 
 ## Evaluation
 
-A stratified holdout split is used with a fixed random seed. Accuracy, macro-F1, weighted-F1, a per-class classification report, and a confusion matrix are saved under `artifacts/` after training. These metrics are descriptive and should not be interpreted as evidence of clinical validity.
+The baseline uses a fixed-seed holdout split and reports accuracy, balanced accuracy, macro-F1, weighted-F1, a per-class classification report, and a confusion matrix. These metrics describe only the supplied dataset and split; they are not evidence of clinical validity or generalization to another hospital.
+
+For more serious assessment, consider patient-grouped or time-based splits where appropriate, cross-validation, calibration review, per-class error analysis, subgroup checks, and external validation.
 
 ## Historical notebook caution
 
-The original notebook contains separate label-encoding of training and test frames and later creates synthetic classification data. Those operations can lead to inconsistent encodings or results that do not measure performance on the original hospital dataset. The refactored training command does not reuse those notebook metrics.
+The original notebook separately fits label encoders to train and test data and later creates synthetic classification data. Separate encoding can map categories inconsistently, and synthetic-data experiments do not measure generalization on the original hospital dataset. The maintained workflow does not use the historical notebook's reported results.
+
+## Data and privacy
+
+Use datasets only when their provenance and terms allow it. Do not upload or commit identifiable patient data, confidential records, or other sensitive information.
