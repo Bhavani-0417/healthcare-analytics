@@ -90,7 +90,7 @@ pip install -e ".[dev]"
 streamlit run app.py
 ```
 
-Upload a labeled CSV, select its target column (usually `Stay` for the original dataset), and train the model. After evaluation, upload a second CSV with the same feature columns but without the target to produce batch predictions.
+Upload a labeled CSV, select its target column (usually `Stay`), and train the model. For a quick UI walkthrough, try `data/synthetic_demo.csv`; it contains artificial demonstration rows only. After evaluation, upload a second CSV with the same feature columns but without the target to produce batch predictions.
 
 ### 5. Train from the command line
 
@@ -140,7 +140,7 @@ See [docs/MODEL_CARD.md](docs/MODEL_CARD.md) for the model's intended use, evalu
 
 ## Data and privacy
 
-The maintained training workflow expects a labeled CSV uploaded by the user or supplied to the CLI. The repository does not contain a verified training dataset for this pipeline.
+The maintained training workflow expects a labeled CSV uploaded by the user or supplied to the CLI. The repository includes `data/synthetic_demo.csv`, a small artificial dataset for trying the app workflow. It is not real patient data and must not be used to draw healthcare conclusions. The repository does not contain a verified real training dataset for this pipeline.
 
 The historical `test.csv` is preserved at `archive/legacy-project/Health50/test.csv`. Its provenance and license should be verified before redistribution or reuse. Do not upload identifiable patient information, confidential records, or data you are not authorized to share.
 
