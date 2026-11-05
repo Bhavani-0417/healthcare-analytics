@@ -8,7 +8,7 @@ Thank you for considering an improvement.
 2. Create and activate a virtual environment.
 3. Install dependencies: `pip install -e ".[app,dev]"`.
 4. Run tests: `pytest -q`.
-5. Run lint: `ruff check app.py train.py src tests`.
+5. Run lint: `ruff check app.py src tests`.
 
 ## Pull request checklist
 
