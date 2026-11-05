@@ -1,127 +1,152 @@
 # Healthcare Analytics: Patient Length-of-Stay Prediction
 
-A machine-learning project exploring hospital admission data to predict a patient's **length-of-stay (LOS) category**. The goal is to investigate how patient and admission characteristics can support hospital capacity planning and operational decision-making.
+An exploratory machine-learning project that studies hospital admission data and predicts a patient's **length-of-stay (LOS) category**. The refactored workflow provides a reproducible preprocessing pipeline, a held-out evaluation step, and a Streamlit demonstration app.
 
-> **Project status:** Academic / exploratory project. The notebook and Streamlit scripts are historical implementations and should be reviewed and tested before being used as a production application. This project is not a clinical decision-support system.
+> **Educational project only.** This prototype is not medical advice or a clinical decision-support system. It must not be used to make admission, treatment, or discharge decisions.
 
-## Problem Statement
+## Project overview
 
-Patient length of stay is an important operational measure for hospitals. Estimating the likely stay category at admission may help teams study bed demand, resource allocation, and care planning.
+Patient length of stay is an important operational measure. This project explores whether admission and hospital attributes can help estimate LOS categories for educational analysis of hospital capacity and resource planning.
 
-This repository explores data preparation, exploratory analysis, feature encoding, and classification approaches for LOS prediction.
+### Models and historical results
 
-## Models Explored
+The earlier README recorded these results:
 
-The original project report records the following accuracy values:
-
-| Model | Reported accuracy |
+| Historical model | Previously reported accuracy |
 | --- | ---: |
 | Naive Bayes | 34.55% |
 | XGBoost | 43.05% |
 | Dense Neural Network | 42.50% |
 
-**Interpretation:** These are values reported in the original project documentation. They have not been independently reproduced in this repository review. Re-run the notebook with a documented train/validation/test split before treating them as comparable model benchmarks.
+These values are retained only as historical project notes. They have not been reproduced by the refactored pipeline and should not be compared as validated benchmarks. Train the new pipeline on the labeled dataset to generate fresh metrics.
 
-## Repository Contents
+## Technology stack
+- Python 3.10+
+- Pandas and NumPy
+- Scikit-learn and Joblib
+- Streamlit
+- Pytest and Ruff
+
+## Repository structure
 
 ```text
 healthcare-analytics/
-├── Healthcare-Analytics-main/
-│   ├── Health50/
-│   │   └── test.csv
-│   ├── app.py
-│   ├── app1.py
-│   ├── health.py
-│   ├── health.ipynb
-│   ├── encoder.pkl
-│   └── encoder1.pkl
-└── README.md
+ ├── app.py                      # Streamlit prediction interface
+ ├─  train.py                    # Model training entry point
+ ├─  pyproject.toml               # Project metadata and dependencies
+ ┸─ src/healthcare_los/
+ │   ├─ data.py                 # Dataset validation and feature preparation
+│   └─ modeling.py             # Preprocessing, training, and evaluation
+│  └─ cli.py                  # Training CLI
+蔜── data/raw/                   # Local training CSV (not committed)
+┸─ artifacts/                  # Generated model and evaluation outputs (not committed)
+├─ tests/                      # Automated tests
+├─ docs/MODELING_NOTES.md      # Modeling assumptions and cautions
+┸─ [github/workflows/ci.yml]   # Automated test and lint workflow
+┙─ Healthcare-Analytics-main/ # Original notebook and scripts retained for reference
 ```
 
-- **health.ipynb** — exploratory data analysis, preprocessing, and model experiments.
-- **app.py / app1.py / health.py** — Streamlit application experiments.
-- **Health50/test.csv** — dataset file currently visible in the repository.
-- **encoder*.pkl** — serialized encoders used by earlier experiments.
+## Dataset setup
+The historical notebook expects a labeled training file with a `Stay` target. The current repository does **not** contain that labeled training file; it contains an older `Health50/test.csv` file, which is not suitable for supervised training because it does not include the target label.
 
-Some scripts refer to files such as `train.csv` and `model.pkl` that are not present at the paths currently referenced. The app therefore may not run as-is.
+1. Obtain the authorized labeled training CSV from the dataset provider or original project source.
+2. Place it at `data/raw/train.csv`.
+3. Confirm that it includes the `Stay` target column.
+4. Do not commit patient-identifiable, confidential, or otherwise sensitive records. Local CSV files in `data/raw/` are ignored by Git.
 
-## Technology Stack
+See [`data/raw/README.md`](data/raw/README.md) for details.
 
-- Python
-- Jupyter Notebook
-- Pandas and NumPy
-- Matplotlib and Seaborn
-- Scikit-learn
-- XGBoost
-- Streamlit
+## Installation
 
-## Getting Started
-
-### 1. Clone the repository
+Python 3.10 or newer is recommended.
 
 ```bash
 git clone https://github.com/Bhavani-0417/healthcare-analytics.git
 cd healthcare-analytics
+python -m venv .venv
 ```
 
-### 2. Set up Python
+Activate the environment:
 
-Use Python 3.10 or a compatible version, then create and activate a virtual environment.
+**Windows PowerShell**
 
-**Windows**
 ```powershell
-python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 ```
 
 **macOS / Linux**
+
 ```bash
-python -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3. Install dependencies
-
-The repository does not currently include a verified dependency lockfile or requirements file. Install the packages used by the notebook and app scripts:
+Install the application and development dependencies:
 
 ```bash
-pip install numpy pandas matplotlib seaborn scikit-learn xgboost streamlit jupyter
+python -m pip install --upgrade pip
+pip install -e ".[app,dev]"
 ```
 
-### 4. Explore the notebook
+## Train and evaluate
 
-Open `Healthcare-Analytics-main/health.ipynb` in Jupyter. The notebook expects training and test CSV files in its working directory; provide the appropriate dataset files before running all cells.
+After placing the labeled CSV at `data/raw/train.csv`:
 
-### 5. Streamlit application
+```bash
+python train.py
+```
 
-The Streamlit scripts are experimental and have file/model dependencies that need to be reconciled before launch. In particular, `health.py` loads `model.pkl` and `train.csv`; those files must exist at the expected paths and be generated using a compatible preprocessing pipeline.
+Optional arguments:
 
-## Important Reproducibility Notes
+```bash
+python train.py --data data/raw/train.csv --target Stay --test-size 0.2 --random-state 42 --output artifacts
+```
 
-- Fit categorical encoders on training data only, then use the same fitted encoders to transform validation and test data.
-- Keep preprocessing, feature ordering, and model artifacts together in a reproducible pipeline.
-- Evaluate on a held-out dataset and report metrics such as accuracy, macro-F1, and a confusion matrix.
-- Document the exact dataset source, target definition, split strategy, and random seed.
-- Do not commit private, identifiable, or otherwise sensitive patient data.
+The training command fits preprocessing only on the training partition, evaluates against a stratified holdout partition, and writes:
 
-## Responsible Use
+- `artifacts/los_pipeline.joblib` — preprocessing and trained model in one artifact.
+- `artifacts/metrics.json` — accuracy, macro-F1, weighted-F1, and per-class metrics.
+- `artifacts/confusion_matrix.csv` — holdout confusion matrix.
 
-This project is for educational experimentation with healthcare data. Predictions are not medical advice and must not be used to make decisions about patient treatment, discharge, or admission. Any real-world use would require appropriate clinical validation, privacy review, bias assessment, and governance.
+Generated model files and metrics are excluded from Git by default.
 
-## Future Improvements
+## Run the Streamlit app
 
-- Consolidate the duplicate Streamlit scripts into one maintainable application.
-- Add a reproducible preprocessing and model-training pipeline.
-- Add a requirements file with tested package versions.
-- Add model evaluation outputs and visualizations.
-- Add input validation, error handling, and automated tests.
-- Provide screenshots or a short demo after the application is verified.
+Train the model first, then run:
+
+```bash
+streamlit run app.py
+```
+
+The interface reads feature names, category options, and numeric ranges from the saved training artifact. It supports unseen categorical values through the fitted one-hot encoder's `handle_unknown="ignore"` behavior.
+
+## Tests and code quality
+
+```bash
+pytest -q
+ruff check .
+```
+
+A GitHub Actions workflow runs tests and lint checks on pushes to the refactor branch and on pull requests to `main`.
+
+## Modeling notes and limitations
+
+- `case_id` and `patientid` are excluded as identifiers; review all other features for leakage and relevance before drawing conclusions.
+- Missing numeric values are median-imputed. Missing categorical values are most-frequent-imputed and one-hot encoded.
+- Evaluation uses a stratified holdout split. For serious model assessment, add cross-validation, class-level error analysis, calibration review, and external validation.
+- The earlier notebook separately fitted label encoders to train and test data and later generated synthetic classification data. Those notebook results are not used by the refactored training workflow.
+- Any real-world healthcare use would require appropriate privacy, security, fairness, clinical validation, and governance review.
+
+See [`docs/MODELING_NOTES.md`](docs/MODELING_NOTES.md).
+
+## Future improvements
+
+- Re-run model comparison using the authorized labeled dataset and a consistent evaluation protocol.
+- Add feature-importance analysis and class-level error review.
+- Add model versioning and reproducible experiment tracking.
+- Add app screenshots only after the end-to-end workflow is verified.
 
 ## Author
 
-**Bhavani Gujjari**  
-GitHub: [@Bhavani-0417](https://github.com/Bhavani-0417)
+**Bhavani Gujjari** · [GitHub](https://github.com/Bhavani-0417)
 
----
-
-Contributions, suggestions, and constructive feedback are welcome.
+Feedback and suggestions are welcome.
