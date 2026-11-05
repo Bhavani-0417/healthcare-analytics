@@ -4,7 +4,7 @@
 
 - Project: Healthcare Analytics — Patient Length-of-Stay Prediction
 - Maintained estimator: scikit-learn RandomForestClassifier
-- Model version: 0.2.0 baseline
+- Model version: 0.2.1 baseline
 - Intended development stage: educational / exploratory
 
 ## Intended use
@@ -17,7 +17,7 @@ This model is not intended for diagnosis, admission, triage, treatment planning,
 
 ## Training and evaluation
 
-The maintained workflow accepts a labeled CSV supplied by the user. It removes rows with missing target values, removes all-empty feature columns, splits the data into training and hold-out partitions, and fits preprocessing only on the training partition.
+The maintained workflow accepts a labeled CSV supplied by the user. It removes rows with missing target values, excludes the known row/patient identifier columns `case_id` and `patientid` when present, removes all-empty feature columns, splits the data into training and hold-out partitions, and fits preprocessing only on the training partition.
 
 Numeric columns use median imputation. Categorical columns use most-frequent imputation and one-hot encoding with unknown categories ignored at inference time. A class-weighted Random Forest is used as the baseline estimator.
 
@@ -40,6 +40,7 @@ When publishing a new experiment, record the dataset version, row counts, target
 - Dataset shift across hospitals and populations may substantially reduce performance.
 - Missing, miscoded, or inconsistently defined target labels can invalidate evaluation.
 - Feature leakage may occur if inputs encode information only known after admission or after the outcome.
+- Excluding row/patient IDs reduces one source of memorization risk but does not remove all potential leakage.
 - The preprocessing and classifier pipeline is a technical baseline, not a clinically approved system.
 
 ## Ethical, privacy, and safety considerations
