@@ -137,7 +137,7 @@ See [data/raw/README.md](data/raw/README.md).
 
 ```bash
 pytest -q
-ruff check app.py train.py src tests
+ruff check app.py src tests
 ```
 
 GitHub Actions runs tests and lint checks on pushes to `main` and pull requests to `main`. Legacy files are retained for traceability and excluded from the maintained-code lint target.
