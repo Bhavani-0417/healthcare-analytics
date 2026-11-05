@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     classification_report,
     confusion_matrix,
     f1_score,
@@ -21,7 +22,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-from healthcare_los.data import DEFAULT_TARGET, load_training_data, prepare_features_target
+from healthcare_los.data import (
+    DEFAULT_TARGET,
+    load_training_data,
+    prepare_features_target,
+)
 
 
 def _column_groups(features: pd.DataFrame) -> tuple[list[str], list[str]]:
@@ -40,19 +45,27 @@ def build_pipeline(features: pd.DataFrame, random_state: int = 42) -> Pipeline:
     transformers: list[tuple[str, Pipeline, list[str]]] = []
 
     if numeric_columns:
-        numeric_pipeline = Pipeline(
-            steps=[("imputer", SimpleImputer(strategy="median"))]
+        transformers.append(
+            (
+                "numeric",
+                Pipeline([("imputer", SimpleImputer(strategy="median"))]),
+                numeric_columns,
+            )
         )
-        transformers.append(("numeric", numeric_pipeline, numeric_columns))
 
     if categorical_columns:
-        categorical_pipeline = Pipeline(
-            steps=[
-                ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("one_hot", OneHotEncoder(handle_unknown="ignore")),
-            ]
+        transformers.append(
+            (
+                "categorical",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("one_hot", OneHotEncoder(handle_unknown="ignore")),
+                    ]
+                ),
+                categorical_columns,
+            )
         )
-        transformers.append(("categorical", categorical_pipeline, categorical_columns))
 
     preprocessor = ColumnTransformer(
         transformers=transformers,
@@ -74,7 +87,7 @@ def build_pipeline(features: pd.DataFrame, random_state: int = 42) -> Pipeline:
 
 
 def build_input_schema(features: pd.DataFrame) -> dict[str, dict[str, Any]]:
-    """Build data-derived input defaults for the Streamlit prediction form."""
+    """Build data-derived defaults for the Streamlit prediction form."""
     categorical_columns, numeric_columns = _column_groups(features)
     schema: dict[str, dict[str, Any]] = {}
 
@@ -113,30 +126,29 @@ def build_input_schema(features: pd.DataFrame) -> dict[str, dict[str, Any]]:
     return schema
 
 
-def train_and_save(
-    data_path: str | Path = "data/raw/train.csv",
-    output_dir: str | Path = "artifacts",
+def train_evaluate(
+    dataframe: pd.DataFrame,
     target_column: str = DEFAULT_TARGET,
     test_size: float = 0.2,
     random_state: int = 42,
 ) -> dict[str, Any]:
-    """Train, evaluate on a stratified holdout set, and save the complete pipeline."""
+    """Train and evaluate a model on a holdout split; return its bundle and reports."""
+    if not isinstance(dataframe, pd.DataFrame):
+        raise TypeError("dataframe must be a pandas DataFrame.")
     if not 0.05 <= test_size <= 0.5:
         raise ValueError("test_size must be between 0.05 and 0.5.")
 
-    frame = load_training_data(data_path)
     features, target, dropped_ids = prepare_features_target(
-        frame,
+        dataframe,
         target_column=target_column,
     )
-
-    # Entirely missing columns cannot be imputed meaningfully; exclude and record them.
     empty_columns = features.columns[features.isna().all()].tolist()
     if empty_columns:
         features = features.drop(columns=empty_columns)
     if features.empty:
         raise ValueError("No usable predictor columns remain after cleaning.")
-
+    if len(features) < 10:
+        raise ValueError("At least 10 labeled rows are required for training.")
     if target.nunique() < 2:
         raise ValueError("At least two target classes are required for classification.")
 
@@ -157,55 +169,110 @@ def train_and_save(
         random_state=random_state,
         stratify=stratify,
     )
-
     pipeline = build_pipeline(x_train, random_state=random_state)
     pipeline.fit(x_train, y_train)
     predictions = pipeline.predict(x_test)
 
-    metrics: dict[str, Any] = {
-        "target_column": target_column,
-        "rows_used": int(len(features)),
-        "training_rows": int(len(x_train)),
-        "test_rows": int(len(x_test)),
-        "features_used": list(features.columns),
-        "identifier_columns_excluded": dropped_ids,
-        "all_missing_columns_excluded": empty_columns,
-        "classes": sorted(target.unique().tolist()),
-        "random_state": int(random_state),
-        "test_size": float(test_size),
+    labels = list(pipeline.named_steps["classifier"].classes_)
+    report = classification_report(
+        y_test,
+        predictions,
+        labels=labels,
+        output_dict=True,
+        zero_division=0,
+    )
+    matrix = confusion_matrix(y_test, predictions, labels=labels)
+    metrics = {
         "accuracy": float(accuracy_score(y_test, predictions)),
+        "balanced_accuracy": float(
+            balanced_accuracy_score(y_test, predictions)
+        ),
         "macro_f1": float(
             f1_score(y_test, predictions, average="macro", zero_division=0)
         ),
         "weighted_f1": float(
             f1_score(y_test, predictions, average="weighted", zero_division=0)
         ),
-        "classification_report": classification_report(
-            y_test,
-            predictions,
-            output_dict=True,
-            zero_division=0,
-        ),
     }
 
-    destination = Path(output_dir)
-    destination.mkdir(parents=True, exist_ok=True)
-    artifact = {
+    bundle = {
         "pipeline": pipeline,
         "feature_columns": list(features.columns),
         "input_schema": build_input_schema(x_train),
         "target_column": target_column,
+        "excluded_identifier_columns": dropped_ids,
+        "excluded_all_missing_columns": empty_columns,
         "metrics": metrics,
+        "random_state": int(random_state),
     }
-    joblib.dump(artifact, destination / "los_pipeline.joblib")
+    return {
+        "bundle": bundle,
+        "metrics": metrics,
+        "classification_report": pd.DataFrame(report).transpose(),
+        "confusion_matrix": pd.DataFrame(
+            matrix,
+            index=[str(value) for value in labels],
+            columns=[str(value) for value in labels],
+        ),
+        "n_train": len(x_train),
+        "n_test": len(x_test),
+    }
+
+
+def predict_rows(bundle: dict[str, Any], rows: pd.DataFrame) -> pd.Series:
+    """Predict rows with the saved preprocessing/model pipeline."""
+    if "pipeline" not in bundle or "feature_columns" not in bundle:
+        raise ValueError("Model bundle is missing required fields.")
+
+    columns = bundle["feature_columns"]
+    missing = [column for column in columns if column not in rows.columns]
+    if missing:
+        raise ValueError(
+            "Input data is missing required feature columns: " + ", ".join(missing)
+        )
+    return pd.Series(
+        bundle["pipeline"].predict(rows[columns]),
+        name="prediction",
+        index=rows.index,
+    )
+
+
+def train_and_save(
+    data_path: str | Path = "data/raw/train.csv",
+    output_dir: str | Path = "artifacts",
+    target_column: str = DEFAULT_TARGET,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Train from a CSV, save the full model bundle, and write evaluation outputs."""
+    frame = load_training_data(data_path)
+    result = train_evaluate(
+        frame,
+        target_column=target_column,
+        test_size=test_size,
+        random_state=random_state,
+    )
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    joblib.dump(result["bundle"], destination / "los_pipeline.joblib")
+
+    metrics = {
+        **result["metrics"],
+        "target_column": target_column,
+        "training_rows": result["n_train"],
+        "test_rows": result["n_test"],
+        "feature_columns": result["bundle"]["feature_columns"],
+        "identifier_columns_excluded": result["bundle"]["excluded_identifier_columns"],
+        "all_missing_columns_excluded": result["bundle"]["excluded_all_missing_columns"],
+        "random_state": int(random_state),
+        "test_size": float(test_size),
+        "classification_report": result["classification_report"].to_dict(),
+    }
     (destination / "metrics.json").write_text(
         json.dumps(metrics, indent=2),
         encoding="utf-8",
     )
-
-    labels = sorted(y_test.unique().tolist())
-    matrix = confusion_matrix(y_test, predictions, labels=labels)
-    pd.DataFrame(matrix, index=labels, columns=labels).to_csv(
+    result["confusion_matrix"].to_csv(
         destination / "confusion_matrix.csv",
         index_label="actual",
     )
